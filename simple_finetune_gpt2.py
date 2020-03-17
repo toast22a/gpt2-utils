@@ -222,7 +222,7 @@ elif os.path.isdir(eval_file_path):
                 block_size=msl if msl > 0 else tokenizer.max_len_single_sentence
             )
 else:
-    throw Exception("Invalid eval dataset option")
+    raise Exception("Invalid eval dataset option")
 
 # Training loop
 
