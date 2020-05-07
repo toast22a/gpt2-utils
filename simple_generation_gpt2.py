@@ -58,7 +58,7 @@ def sample_sequence(model, tokenizer, length, context_raw, temperature=1, top_k=
             if i == length - 1:
                 outputs = model(generated[:, -max_past:])
             else:
-                outputs = model(next_token if next_token else
+                outputs = model(next_token if next_token is not None else
                             generated, past=past)
             
             next_token_logits = outputs[0][:, -1, :] / (temperature if temperature > 0 else 1.)
@@ -138,6 +138,8 @@ if prompt is None:
     print("No prompt given -- performing unconditional generation")
     prompt = "<|endoftext|>"
 
+max_context = model.config.max_position_embeddings
+context_tokens = tokenizer.encode(context_raw)[-max_context:]
 out = sample_sequence(
     model=model,
     tokenizer=tokenizer,
