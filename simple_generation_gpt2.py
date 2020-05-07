@@ -41,19 +41,26 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
     return logits
 
 
-def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=0, top_p=0.0, device='cpu'):
+def sample_sequence(model, tokenizer, length, context_raw, temperature=1, top_k=0, top_p=0.0, device='cpu'):
+    max_context = model.config.max_position_embeddings
+    
+    context = tokenizer.encode(context_raw)[-max_context:]
     context = torch.tensor(context, dtype=torch.long, device=device)
-    context = context.unsqueeze(0).repeat(num_samples, 1)
+    context = context.unsqueeze(0)
 
+    max_past = min(max_context+length,
+                self.tokenizer.max_len_single_sentence)
     past = None
     next_token = None
     generated = context
     with torch.no_grad():
-        for _ in trange(length):
-
-            inputs = {'input_ids': next_token if next_token else generated, 'past': past}
-
-            outputs = model(**inputs)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet/CTRL (cached hidden-states)
+        for i in trange(length):
+            if i == length - 1:
+                outputs = model(generated[:, -max_past:])
+            else:
+                outputs = model(next_token if next_token else
+                            generated, past=past)
+            
             next_token_logits = outputs[0][:, -1, :] / (temperature if temperature > 0 else 1.)
 
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
@@ -62,7 +69,7 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
             else:
                 next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
             generated = torch.cat((generated, next_token), dim=1)
-            past = outputs[1]
+            past = [p[..., -max_past+1:, :] for p in outputs[1]]
 
     return generated
 
@@ -74,7 +81,6 @@ parser.add_argument('checkpoint_dir',
                     help="Checkpoint to be used for generation.")
 parser.add_argument('--prompt', default=None)
 parser.add_argument('--length', type=int, default=20)
-parser.add_argument('--num_samples', type=int, default=1)
 parser.add_argument('--temperature', type=float, default=1.0)
 parser.add_argument('--top_k', type=int, default=0)
 parser.add_argument('--top_p', type=float, default=0.9)
@@ -87,7 +93,6 @@ model_dir = args.model_dir
 checkpoint_dir = args.checkpoint_dir
 prompt = args.prompt
 length = args.length
-num_samples = args.num_samples
 temperature = args.temperature
 top_k = args.top_k
 top_p = args.top_p
@@ -133,12 +138,10 @@ if prompt is None:
     print("No prompt given -- performing unconditional generation")
     prompt = "<|endoftext|>"
 
-context_tokens = tokenizer.encode(prompt, add_special_tokens=False)
-
 out = sample_sequence(
     model=model,
-    context=context_tokens,
-    num_samples=num_samples,
+    tokenizer=tokenizer
+    context_raw=prompt,
     length=length,
     temperature=temperature,
     top_k=top_k,
