@@ -49,7 +49,7 @@ def sample_sequence(model, tokenizer, length, context_raw, temperature=1, top_k=
     context = context.unsqueeze(0)
 
     max_past = min(max_context+length,
-                self.tokenizer.max_len_single_sentence)
+                tokenizer.max_len_single_sentence)
     past = None
     next_token = None
     generated = context
@@ -140,7 +140,7 @@ if prompt is None:
 
 out = sample_sequence(
     model=model,
-    tokenizer=tokenizer
+    tokenizer=tokenizer,
     context_raw=prompt,
     length=length,
     temperature=temperature,
